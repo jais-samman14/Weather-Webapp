@@ -7,7 +7,7 @@ btn.addEventListener('click',() =>{
         alert("Please enter a location.");
         return;
     }
-    fetch(`http://api.weatherapi.com/v1/current.json?key=42a81912e57e467da9863411251606&q=${place}&aqi=yes`)
+    fetch(`https://api.weatherapi.com/v1/current.json?key=42a81912e57e467da9863411251606&q=${place}&aqi=yes`)
     .then(response => response.json())
     .then((data) => {
         weatherData = data;
