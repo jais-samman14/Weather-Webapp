@@ -1,50 +1,156 @@
+// =============================================
+// PASTE YOUR NEW API KEY FROM weatherapi.com HERE
+// =============================================
+const API_KEY = '3671d171df0d421eaac94754262503';
+// =============================================
+
 let weatherData = {};
+let isCelsius = true;
 
-const btn = document.getElementById('search-btn');
-btn.addEventListener('click',() =>{
-    const place = document.getElementById('location-input').value.trim();
-    if (place === "") {
-        alert("Please enter a location.");
-        return;
-    }
-    fetch(`https://api.weatherapi.com/v1/current.json?key=42a81912e57e467da9863411251606&q=${place}&aqi=yes`)
-    .then(response => response.json())
-    .then((data) => {
-        weatherData = data;
-        showdata();
-    })
-    .catch(error => console.log('Error :',error));
+// Elements
+const searchBtn = document.getElementById('search-btn');
+const input = document.getElementById('location-input');
+const loader = document.getElementById('loader');
+const errorMsg = document.getElementById('error-msg');
+const errorText = document.getElementById('error-text');
+const weatherContent = document.getElementById('weather-content');
+const toggleBtn = document.getElementById('toggle-unit');
 
+// Search on button click or Enter key
+searchBtn.addEventListener('click', fetchWeather);
+input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') fetchWeather();
 });
 
-function showdata(){
+// Toggle °C / °F
+toggleBtn.addEventListener('click', () => {
+    isCelsius = !isCelsius;
+    if (Object.keys(weatherData).length > 0) updateTemperatureDisplay();
+});
 
-    const city = document.getElementById('city-name');
-    const temp = document.getElementById('current-temp');
-    const description = document.getElementById('weather-description');
-    const windSpeed = document.getElementById('wind-speed');
-    const humidity = document.getElementById('humidity');
-    const cloud = document.getElementById('clouds');
-    const weatherIcon = document.getElementById('weather-icon');
-    const currentDate = document.getElementById('current-date');
+function fetchWeather() {
+    const place = input.value.trim();
+    if (!place) {
+        showError('Please enter a city name.');
+        return;
+    }
 
-    city.textContent = `${weatherData.location.name}, ${weatherData.location.country}`;
+    showLoader();
 
-    currentDate.textContent = new Date(weatherData.location.localtime).toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+    fetch(`https://api.weatherapi.com/v1/forecast.json?key=${API_KEY}&q=${place}&days=5&aqi=yes`)
+        .then(response => {
+            if (!response.ok) throw new Error('City not found');
+            return response.json();
+        })
+        .then(data => {
+            weatherData = data;
+            isCelsius = true;
+            toggleBtn.textContent = 'Switch to °F';
+            showWeather();
+        })
+        .catch(err => {
+            showError(err.message === 'City not found'
+                ? 'City not found. Please check the spelling and try again.'
+                : 'Something went wrong. Please try again later.');
+        });
+}
+
+function showWeather() {
+    hideLoader();
+    hideError();
+    weatherContent.style.display = 'block';
+
+    const loc = weatherData.location;
+    const cur = weatherData.current;
+
+    document.getElementById('city-name').textContent = `${loc.name}, ${loc.country}`;
+    document.getElementById('current-date').textContent = new Date(loc.localtime).toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    temp.textContent = weatherData.current.temp_c;
-    description.textContent = weatherData.current.condition.text;
-    windSpeed.textContent = weatherData.current.wind_kph;
-    humidity.textContent = weatherData.current.humidity;
-    cloud.textContent = weatherData.current.cloud;
-    
-    weatherIcon.src = `https:${weatherData.current.condition.icon}`;
-    weatherIcon.alt = weatherData.current.condition.text;
-    
+    document.getElementById('weather-icon').src = `https:${cur.condition.icon}`;
+    document.getElementById('weather-icon').alt = cur.condition.text;
+    document.getElementById('weather-description').textContent = cur.condition.text;
+    document.getElementById('wind-speed').textContent = cur.wind_kph;
+    document.getElementById('humidity').textContent = cur.humidity;
+    document.getElementById('clouds').textContent = cur.cloud;
+    document.getElementById('visibility').textContent = cur.vis_km;
+    document.getElementById('uv-index').textContent = cur.uv;
 
+    updateTemperatureDisplay();
+    renderForecast();
+}
+
+function updateTemperatureDisplay() {
+    const cur = weatherData.current;
+
+    if (isCelsius) {
+        document.getElementById('current-temp').textContent = Math.round(cur.temp_c);
+        document.getElementById('unit-label').textContent = '°C';
+        document.getElementById('feels-like').textContent = Math.round(cur.feelslike_c);
+        document.getElementById('feels-unit').textContent = '°C';
+        toggleBtn.textContent = 'Switch to °F';
+    } else {
+        document.getElementById('current-temp').textContent = Math.round(cur.temp_f);
+        document.getElementById('unit-label').textContent = '°F';
+        document.getElementById('feels-like').textContent = Math.round(cur.feelslike_f);
+        document.getElementById('feels-unit').textContent = '°F';
+        toggleBtn.textContent = 'Switch to °C';
+    }
+
+    renderForecast();
+}
+
+function renderForecast() {
+    const forecastContainer = document.getElementById('forecast-days');
+    forecastContainer.innerHTML = '';
+
+    const days = weatherData.forecast.forecastday;
+
+    days.forEach(day => {
+        const date = new Date(day.date);
+        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        const high = isCelsius ? Math.round(day.day.maxtemp_c) + '°C' : Math.round(day.day.maxtemp_f) + '°F';
+        const low = isCelsius ? Math.round(day.day.mintemp_c) + '°C' : Math.round(day.day.mintemp_f) + '°F';
+
+        const card = document.createElement('div');
+        card.classList.add('forecast-day');
+        card.innerHTML = `
+            <p class="forecast-dayname">${dayName}</p>
+            <p class="forecast-date">${dateStr}</p>
+            <img src="https:${day.day.condition.icon}" alt="${day.day.condition.text}">
+            <p class="forecast-condition">${day.day.condition.text}</p>
+            <div class="forecast-temp">
+                <span class="high">${high}</span>
+                <span class="low">${low}</span>
+            </div>
+            <div class="rain-chance">
+                <i class="fas fa-umbrella"></i> ${day.day.daily_chance_of_rain}%
+            </div>
+        `;
+        forecastContainer.appendChild(card);
+    });
+}
+
+function showLoader() {
+    loader.classList.remove('hidden');
+    weatherContent.style.display = 'none';
+    hideError();
+}
+
+function hideLoader() {
+    loader.classList.add('hidden');
+}
+
+function showError(msg) {
+    hideLoader();
+    errorText.textContent = msg;
+    errorMsg.classList.remove('hidden');
+    weatherContent.style.display = 'none';
+}
+
+function hideError() {
+    errorMsg.classList.add('hidden');
 }
